@@ -12,7 +12,7 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <App firstName={name} age={12} />
+    <App/>
   </React.StrictMode>
 );
 reportWebVitals();
