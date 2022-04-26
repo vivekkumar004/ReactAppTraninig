@@ -1,63 +1,80 @@
 import "./App.css";
 import List from "./components/List";
-import Search from "./components/Search";
+import InputWithLabel from "./components/InputWithLabel";
 import logo from "./assets/logo.png";
 import usePersistence from "./hooks/usePersistence";
+import React, { useEffect, useState, useReducer, useCallback } from "react";
+import axios from "axios";
 
-const title = "React Training";
+const title: string = "React Training";
 
-const listOfItems = [
-  {
-    title: "Learn React",
-    url: "https://eprint.iacr.org/2021/1022",
-    created_at: "2011-12-12",
-    author: "grey-area",
-    points: 1107,
-    num_comments: 12,
-    objectID: 1,
-  },
-  {
-    title: "Learn TypeScript",
-    url: "https://eprint.iacr.org/2021/1022",
-    created_at: "2012-12-12",
-    author: "grey-area",
-    points: 6107,
-    num_comments: 1,
-    objectID: 2,
-  },
-  {
-    created_at: "2017-02-19T21:16:33.000Z",
-    title: "Reflecting on one very, very strange year at Uber",
-    url: "https://www.susanjfowler.com/blog/2017/2/19/reflecting-on-one-very-strange-year-at-uber",
-    author: "grey-area",
-    points: 4107,
-    num_comments: 530,
-    objectID: 3,
-  },
-  {
-    created_at: "2021-04-05T14:04:22.000Z",
-    title: "Google’s copying of the Java SE API was fair use [pdf]",
-    url: "https://www.supremecourt.gov/opinions/20pdf/18-956_d18f.pdf",
-    author: "pdoconnell",
-    points: 4103,
-    num_comments: 930,
-    objectID: 4,
-  },
-];
+function storiesReducer(state: any, action: any) {
+  switch (action.type) {
+    case "SET_STORIES":
+      return { data: action.payload.data, isError: false, isLoading: false };
+    case "INIT_FETCH":
+      return { ...state, isLoading: true, isError: false };
+    case "FETCH_FAILURE":
+      return { ...state, isLoading: false, isError: true };
+    case "REMOVE_STORY":
+      const filteredState = state.data.filter(
+        (story: any) => story.objectID !== action.payload.id
+      );
+      return { data: filteredState, isError: false, isLoading: false };
+    default:
+      return state;
+  }
+}
 
-function App() {
-  const [searchText, setSearchText]: any = usePersistence(
-    "searchTerm",
-    "React"
-  );
+const API_ENDPOINT = "https://hn.algolia.com/api/v1/search?query=";
 
-  function handleChange(event: any) {
+function App(): JSX.Element {
+  const [searchText, setSearchText] = usePersistence("searchTerm", "React");
+  const [url, setUrl] = useState(API_ENDPOINT + searchText);
+
+  const [stories, dispatchStories] = useReducer(storiesReducer, {
+    data: [],
+    isError: false,
+    isLoading: false,
+  });
+
+  const handleFetchStories = useCallback(async () => {
+    dispatchStories({ type: "INIT_FETCH" });
+    try {
+      const response = await axios.get(url);
+      dispatchStories({
+        type: "SET_STORIES",
+        payload: { data: response.data.hits },
+      });
+    } catch {
+      dispatchStories({ type: "FETCH_FAILURE" });
+    }
+  }, [url]);
+
+  useEffect(() => {
+    handleFetchStories();
+  }, [handleFetchStories]);
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     setSearchText(event.target.value);
   }
 
-  const filteredList = listOfItems.filter((item: any) =>
-    item.title.toLowerCase().includes(searchText.toLowerCase())
-  );
+  function handleDeleteClick(objectId: number) {
+    dispatchStories({ type: "REMOVE_STORY", payload: { id: objectId } });
+  }
+
+  function handleSubmitClick(e: any) {
+    e.preventDefault();
+    setUrl(API_ENDPOINT + searchText);
+  }
+
+  if (stories.isError) {
+    return (
+      <h1 style={{ marginTop: "10rem", color: " red" }}>
+        Something went wrong
+      </h1>
+    );
+  }
 
   return (
     <div>
@@ -66,11 +83,20 @@ function App() {
           <h1>{title}</h1>
           <img src={logo} />
         </div>
-        <Search searchText={searchText} onChange={handleChange}>
+        <InputWithLabel
+          searchText={searchText}
+          onChange={handleChange}
+          id="searchBox"
+          onSearchSubmit={handleSubmitClick}
+        >
           Search
-        </Search>
+        </InputWithLabel>
       </nav>
-      <List listOfItems={filteredList} />
+      {stories.isLoading ? (
+        <h1 style={{ marginTop: "10rem" }}>Loading</h1>
+      ) : (
+        <List listOfItems={stories.data} onClickDelete={handleDeleteClick} />
+      )}
     </div>
   );
 }
